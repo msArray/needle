@@ -158,9 +158,10 @@ def main():
     p.add_argument("--tools", type=str, default=None, help="Tool schemas JSON to seed generation")
     p.add_argument("--augment", type=str, default=None, help="Existing JSONL to expand")
     p.add_argument("--num-samples", type=int, default=100)
-    p.add_argument("--batch-size", type=int, default=25)
-    p.add_argument("--workers", type=int, default=16,
-                   help="Concurrent OpenRouter requests (default: 16)")
+    p.add_argument("--batch-size", type=int, default=5,
+                   help="Examples requested per API call (default: 5)")
+    p.add_argument("--workers", type=int, default=4,
+                   help="Concurrent API requests (default: 4)")
     p.add_argument("--model", type=str, default=None,
                    help="Model name (defaults to BAI_MODEL, DEEPSEEK_MODEL, or deepseek-chat)")
     p.add_argument("--language", type=str, default="ja",

@@ -139,7 +139,7 @@ with open("tools.json", "w", encoding="utf-8") as f:
 ### セル 4: 日本語データ生成・学習・書き出し
 
 ```python
-!needle generate-data --tools tools.json --num-samples 500 --batch-size 10 --workers 4 --language ja --output data_ja.jsonl
+!needle generate-data --tools tools.json --num-samples 500 --batch-size 5 --workers 4 --language ja --model deepseek-v4-flash --output data_ja.jsonl
 !needle finetune data_ja.jsonl --epochs 10 --batch-size 16 --lora-rank 16 --lora-alpha 32 --max-len 1024 --out checkpoints/needle_ja_lora.pkl
 !needle build checkpoints/needle2.pkl --lora checkpoints/needle_ja_lora.pkl --out needle_ja.cact --bits 2
 ```

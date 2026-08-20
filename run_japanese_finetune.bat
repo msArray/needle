@@ -11,7 +11,7 @@ if not exist "tools.json" (
 )
 
 call ".venv\Scripts\activate.bat"
-needle generate-data --tools tools.json --num-samples 500 --batch-size 10 --workers 4 --language ja --output data_ja.jsonl
+needle generate-data --tools tools.json --num-samples 500 --batch-size 5 --workers 4 --language ja --model deepseek-v4-flash --output data_ja.jsonl
 if errorlevel 1 exit /b 1
 needle finetune data_ja.jsonl --epochs 10 --batch-size 16 --lora-rank 16 --lora-alpha 32 --max-len 1024 --out checkpoints\needle_ja_lora.pkl
 if errorlevel 1 exit /b 1

@@ -109,12 +109,19 @@ def _api_credentials(api_key=None):
 def _openrouter(messages, model, api_key, temperature=0.9, url=None):
     payload = json.dumps({"model": model, "messages": messages,
                           "temperature": temperature}).encode("utf-8")
-    request = urllib.request.Request(url or OPENROUTER_URL, data=payload, headers={
+    request_url = url or OPENROUTER_URL
+    headers = {
         "Authorization": "Bearer " + api_key,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/cactus-compute/needle",
-        "X-Title": "needle",
-    })
+    }
+    # These are OpenRouter attribution headers; some compatible providers/WAFs
+    # reject them, so only send them to OpenRouter itself.
+    if "openrouter.ai" in request_url.lower():
+        headers.update({
+            "HTTP-Referer": "https://github.com/cactus-compute/needle",
+            "X-Title": "needle",
+        })
+    request = urllib.request.Request(request_url, data=payload, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=180) as response:
             body = json.loads(response.read().decode("utf-8"))
