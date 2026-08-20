@@ -2,9 +2,35 @@ import concurrent.futures
 import json
 import os
 import pickle
+import shutil
 import sys
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+
+
+def _load_dotenv():
+    """Load a local .env without making dotenv a runtime dependency."""
+    path = os.environ.get("NEEDLE_ENV_FILE", ".env")
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for raw in handle:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key, value = key.strip(), value.strip()
+                if not key or key in os.environ:
+                    continue
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                    value = value[1:-1]
+                os.environ[key] = value
+    except OSError:
+        pass
+
+
+_load_dotenv()
 
 # The jax metal plugin refuses to load against a newer PJRT API without this;
 # it must be in the environment before jax initialises its backend, and this
@@ -26,7 +52,14 @@ DEFAULT_BASE = "checkpoints/needle2.pkl"
 OPENROUTER_URL = os.environ.get(
     "OPENROUTER_URL", "https://openrouter.ai/api/v1/chat/completions"
 )
-DEFAULT_MODEL = "deepseek/deepseek-v4-flash"
+DEEPSEEK_URL = os.environ.get(
+    "DEEPSEEK_URL", "https://api.deepseek.com/chat/completions"
+)
+BAI_URL = os.environ.get("BAI_API_URL") or os.environ.get("BAI_API_BASE_URL")
+if not BAI_URL and os.environ.get("BAI_API_KEY"):
+    BAI_URL = "https://api.b.ai/v1/chat/completions"
+DEFAULT_MODEL = (os.environ.get("BAI_MODEL") or os.environ.get("DEEPSEEK_MODEL")
+                 or "deepseek-chat")
 
 _GEN_SYSTEM = (
     "You generate training data for a tool-calling and extraction model. Given a "
@@ -37,7 +70,9 @@ _GEN_SYSTEM = (
 _GEN_TEMPLATE = """Schemas available (JSON):
 {tools}
 
-Produce {n} varied examples as a JSON array. Each element is an object:
+Produce {n} varied examples as a JSON array. Write all natural-language fields in {language}.
+Keep schema names, JSON keys, enum values, and extracted values unchanged when they are
+identifiers or literal values. Each element is an object:
   {{"query": "<a natural user request to act on, or a passage of text to extract from>",
     "reasoning": "<one short line deriving each argument from its source span in the query>",
     "answers": [{{"name": "<schema name>", "arguments": {{...}}}}]}}
@@ -53,10 +88,27 @@ Rules:
 - Vary phrasing, values, and which schemas are used. Return ONLY the JSON array."""
 
 
-def _openrouter(messages, model, api_key, temperature=0.9):
+def _api_credentials(api_key=None):
+    """Select b.ai, direct DeepSeek, then the OpenRouter-compatible fallback."""
+    if api_key:
+        return api_key, BAI_URL or (DEEPSEEK_URL if os.environ.get("DEEPSEEK_API_KEY")
+                                    else OPENROUTER_URL)
+    bai_key = os.environ.get("BAI_API_KEY")
+    if bai_key and BAI_URL:
+        return bai_key, BAI_URL
+    direct_key = os.environ.get("DEEPSEEK_API_KEY")
+    if direct_key:
+        return direct_key, DEEPSEEK_URL
+    router_key = os.environ.get("OPENROUTER_API_KEY")
+    if router_key:
+        return router_key, OPENROUTER_URL
+    return None, None
+
+
+def _openrouter(messages, model, api_key, temperature=0.9, url=None):
     payload = json.dumps({"model": model, "messages": messages,
                           "temperature": temperature}).encode("utf-8")
-    request = urllib.request.Request(OPENROUTER_URL, data=payload, headers={
+    request = urllib.request.Request(url or OPENROUTER_URL, data=payload, headers={
         "Authorization": "Bearer " + api_key,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/cactus-compute/needle",
@@ -77,14 +129,16 @@ def _parse_array(text):
     return [r for r in rows if isinstance(r, dict) and "query" in r and "answers" in r]
 
 
-def generate_examples(tools, n=25, model=DEFAULT_MODEL, api_key=None, refusals=3):
-    api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
+def generate_examples(tools, n=25, model=DEFAULT_MODEL, api_key=None, refusals=3,
+                      language="ja"):
+    api_key, url = _api_credentials(api_key)
     if not api_key:
-        raise RuntimeError("set OPENROUTER_API_KEY to generate data")
+        raise RuntimeError("set DEEPSEEK_API_KEY (or OPENROUTER_API_KEY) to generate data")
     tools_json = tools if isinstance(tools, str) else json.dumps(tools, indent=2)
-    prompt = _GEN_TEMPLATE.format(tools=tools_json, n=n, refusals=refusals)
+    prompt = _GEN_TEMPLATE.format(tools=tools_json, n=n, refusals=refusals,
+                                  language=language)
     text = _openrouter([{"role": "system", "content": _GEN_SYSTEM},
-                        {"role": "user", "content": prompt}], model, api_key)
+                        {"role": "user", "content": prompt}], model, api_key, url=url)
     rows = _parse_array(text)
     for row in rows:
         row.setdefault("tools", tools if isinstance(tools, list) else json.loads(tools))
@@ -97,10 +151,10 @@ def _dedup_key(example):
 
 
 def generate_dataset(tools, num_samples, model=DEFAULT_MODEL, batch_size=25,
-                     api_key=None, workers=8, progress=None):
-    api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
+                     api_key=None, workers=8, progress=None, language="ja"):
+    api_key, _ = _api_credentials(api_key)
     if not api_key:
-        raise RuntimeError("set OPENROUTER_API_KEY to generate data")
+        raise RuntimeError("set DEEPSEEK_API_KEY (or OPENROUTER_API_KEY) to generate data")
 
     target = int(num_samples * 1.3)
     max_submissions = max(1, target // batch_size * 3)
@@ -111,7 +165,7 @@ def generate_dataset(tools, num_samples, model=DEFAULT_MODEL, batch_size=25,
     def _submit():
         nonlocal submitted
         pending.add(pool.submit(generate_examples, tools, batch_size,
-                                model=model, api_key=api_key))
+                                model=model, api_key=api_key, language=language))
         submitted += 1
 
     for _ in range(min(workers, max(1, -(-target // batch_size)))):
@@ -155,7 +209,8 @@ def _collect_tools(examples):
     return tools
 
 
-def augment_jsonl(path, num_samples, model=DEFAULT_MODEL, batch_size=25, out_path=None, workers=8):
+def augment_jsonl(path, num_samples, model=DEFAULT_MODEL, batch_size=25, out_path=None,
+                  workers=8, language="ja"):
     with open(path) as handle:
         examples = [json.loads(line) for line in handle if line.strip()]
     tools = _collect_tools(examples)
@@ -163,7 +218,7 @@ def augment_jsonl(path, num_samples, model=DEFAULT_MODEL, batch_size=25, out_pat
         raise RuntimeError("no tool schemas found in " + path)
     out_path = out_path or path.replace(".jsonl", "") + ".augmented.jsonl"
     generated = generate_dataset(tools, num_samples, model=model or DEFAULT_MODEL,
-                                 batch_size=batch_size, workers=workers)
+                                 batch_size=batch_size, workers=workers, language=language)
     with open(out_path, "w") as handle:
         for example in examples + generated:
             handle.write(json.dumps(example) + "\n")
@@ -179,14 +234,16 @@ def generate_main(args):
             tools = json.load(handle)
         out = args.output or "needle_data.jsonl"
         rows = generate_dataset(tools, args.num_samples, model=model,
-                                batch_size=args.batch_size, workers=workers)
+                                batch_size=args.batch_size, workers=workers,
+                                language=getattr(args, "language", "ja"))
         with open(out, "w") as handle:
             for row in rows:
                 handle.write(json.dumps(row) + "\n")
         print(f"  {'wrote':<9} {len(rows)} examples  {out}")
     elif args.augment:
         augment_jsonl(args.augment, args.num_samples, model=model,
-                      batch_size=args.batch_size, out_path=args.output, workers=workers)
+                      batch_size=args.batch_size, out_path=args.output, workers=workers,
+                      language=getattr(args, "language", "ja"))
     else:
         raise SystemExit("pass --tools <schemas.json> or --augment <data.jsonl>")
 
@@ -307,7 +364,8 @@ def finetune_local(args, progress=None):
     data_path = args.jsonl_path
     if getattr(args, "generate", 0):
         data_path = augment_jsonl(data_path, args.generate, model=getattr(args, "model", None),
-                                  workers=getattr(args, "workers", 8))
+                                  workers=getattr(args, "workers", 8),
+                                  language=getattr(args, "language", "ja"))
 
     params, config = load_checkpoint(base_path)
     config.dtype = "float32"
@@ -396,6 +454,32 @@ def finetune_local(args, progress=None):
             "base": base_path,
             "rank": args.lora_rank,
         }, handle)
+    if getattr(args, "save_data", True):
+        dataset_copy = out + ".dataset.jsonl"
+        metadata_path = out + ".metadata.json"
+        shutil.copyfile(data_path, dataset_copy)
+        metadata = {
+            "format": 1,
+            "dataset": os.path.abspath(dataset_copy),
+            "source_dataset": os.path.abspath(data_path),
+            "examples": int(len(seqs) + n_val),
+            "training_examples": int(len(seqs)),
+            "validation_examples": int(n_val),
+            "sequence_length": int(max_len),
+            "base_checkpoint": os.path.abspath(base_path),
+            "adapter": os.path.abspath(out),
+            "epochs": int(args.epochs),
+            "batch_size": int(args.batch_size),
+            "learning_rate": float(args.lr),
+            "lora_rank": int(args.lora_rank),
+            "lora_alpha": float(args.lora_alpha),
+            "val_split": float(getattr(args, "val_split", 0.1)),
+            "language": getattr(args, "language", "ja"),
+        }
+        with open(metadata_path, "w", encoding="utf-8") as handle:
+            json.dump(metadata, handle, ensure_ascii=False, indent=2)
+        print(f"  {'dataset':<9} {dataset_copy}")
+        print(f"  {'metadata':<9} {metadata_path}")
     print(f"  {'adapter':<9} {out}")
     print(f"  {'next':<9} needle build {base_path} --lora {out}")
     print(f"  {'note':<9} confidence reports None with tuned weights; the head is not tuned")

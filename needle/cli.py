@@ -8,7 +8,7 @@ HELP = """usage: needle <command> [options]
 
   run            run a checkpoint on a query
   finetune       train a LoRA adapter on JSONL data
-  generate-data  synthesise training data via OpenRouter
+  generate-data  synthesise training data via DeepSeek (or OpenRouter)
   build          export a checkpoint to a .cact archive
   download       download weights or an engine build
   fetch          fetch the engine for this platform
@@ -141,13 +141,18 @@ def main():
     p.add_argument("--val-split", type=float, default=0.1,
                    help="Fraction of examples held out for validation (0 disables)")
     p.add_argument("--generate", type=int, default=0,
-                   help="Generate N extra examples via OpenRouter before training (0 = off)")
-    p.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash",
-                   help="OpenRouter model for --generate")
+                   help="Generate N extra examples via DeepSeek before training (0 = off)")
+    p.add_argument("--model", type=str, default=None,
+                   help="Model name (defaults to BAI_MODEL, DEEPSEEK_MODEL, or deepseek-chat)")
+    p.add_argument("--language", type=str, default="ja",
+                   help="Language for generated natural-language data (default: ja)")
     p.add_argument("--workers", type=int, default=8,
-                   help="Concurrent OpenRouter requests when generating (default: 8)")
+                   help="Concurrent API requests when generating (default: 8)")
     p.add_argument("--checkpoint-dir", type=str, default="checkpoints")
     p.add_argument("--out", type=str, default=None, help="Output adapter path (.pkl)")
+    p.add_argument("--no-save-data", dest="save_data", action="store_false",
+                   help="Do not copy the training JSONL or write metadata next to the adapter")
+    p.set_defaults(save_data=True)
 
     p = sub.add_parser("generate-data")
     p.add_argument("--tools", type=str, default=None, help="Tool schemas JSON to seed generation")
@@ -156,7 +161,10 @@ def main():
     p.add_argument("--batch-size", type=int, default=25)
     p.add_argument("--workers", type=int, default=16,
                    help="Concurrent OpenRouter requests (default: 16)")
-    p.add_argument("--model", type=str, default="deepseek/deepseek-v4-flash")
+    p.add_argument("--model", type=str, default=None,
+                   help="Model name (defaults to BAI_MODEL, DEEPSEEK_MODEL, or deepseek-chat)")
+    p.add_argument("--language", type=str, default="ja",
+                   help="Language for generated natural-language data (default: ja)")
     p.add_argument("--output", type=str, default=None)
 
     p = sub.add_parser("build")

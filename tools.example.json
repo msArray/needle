@@ -1,0 +1,276 @@
+[
+  {
+    "name": "set_lights",
+    "description": "部屋の照明の明るさや電源状態を設定する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "room": { "type": "string", "description": "部屋名" },
+        "brightness": { "type": "integer", "description": "明るさ。0から100" },
+        "power": { "type": "string", "enum": ["on", "off"], "description": "電源状態" },
+        "color": { "type": "string", "description": "色温度または色名" }
+      },
+      "required": ["room"]
+    }
+  },
+  {
+    "name": "set_temperature",
+    "description": "指定した部屋の空調温度と運転モードを設定する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "room": { "type": "string" },
+        "temperature_c": { "type": "number", "description": "設定温度（摂氏）" },
+        "mode": { "type": "string", "enum": ["cool", "heat", "dry", "fan", "auto"] },
+        "fan_speed": { "type": "string", "enum": ["low", "medium", "high", "auto"] }
+      },
+      "required": ["room", "temperature_c"]
+    }
+  },
+  {
+    "name": "control_appliance",
+    "description": "家電の電源を操作する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "appliance": { "type": "string", "description": "家電名" },
+        "power": { "type": "string", "enum": ["on", "off"] }
+      },
+      "required": ["appliance", "power"]
+    }
+  },
+  {
+    "name": "set_blinds",
+    "description": "窓のブラインドやカーテンの開閉度を設定する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "room": { "type": "string" },
+        "position": { "type": "integer", "description": "開き具合。0は全閉、100は全開" }
+      },
+      "required": ["room", "position"]
+    }
+  },
+  {
+    "name": "lock_door",
+    "description": "ドアの施錠または解錠を行う",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "door": { "type": "string", "description": "ドア名" },
+        "action": { "type": "string", "enum": ["lock", "unlock"] }
+      },
+      "required": ["door", "action"]
+    }
+  },
+  {
+    "name": "get_sensor_reading",
+    "description": "センサーの現在値を取得する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "room": { "type": "string" },
+        "sensor": { "type": "string", "enum": ["temperature", "humidity", "motion", "co2", "light"] }
+      },
+      "required": ["room", "sensor"]
+    }
+  },
+  {
+    "name": "play_music",
+    "description": "音楽を再生、停止、または一時停止する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["play", "pause", "stop", "resume"] },
+        "query": { "type": "string", "description": "曲名、アーティスト名、プレイリスト名" },
+        "room": { "type": "string" },
+        "volume": { "type": "integer", "description": "音量。0から100" }
+      },
+      "required": ["action"]
+    }
+  },
+  {
+    "name": "set_alarm",
+    "description": "指定時刻にアラームを設定する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "time": { "type": "string", "description": "HH:MM形式の時刻" },
+        "label": { "type": "string" },
+        "repeat": { "type": "string", "enum": ["once", "daily", "weekdays", "weekends"] }
+      },
+      "required": ["time"]
+    }
+  },
+  {
+    "name": "create_calendar_event",
+    "description": "カレンダーに予定を登録する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "start": { "type": "string", "description": "開始日時。ISO 8601形式" },
+        "end": { "type": "string", "description": "終了日時。ISO 8601形式" },
+        "location": { "type": "string" },
+        "attendees": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      },
+      "required": ["title", "start"]
+    }
+  },
+  {
+    "name": "find_calendar_events",
+    "description": "カレンダーから予定を検索する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string" },
+        "start_date": { "type": "string", "description": "検索開始日。YYYY-MM-DD形式" },
+        "end_date": { "type": "string", "description": "検索終了日。YYYY-MM-DD形式" }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "create_reminder",
+    "description": "指定日時または場所に基づくリマインダーを作成する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "due_at": { "type": "string", "description": "通知日時。ISO 8601形式" },
+        "location": { "type": "string" },
+        "priority": { "type": "string", "enum": ["low", "normal", "high"] }
+      },
+      "required": ["text"]
+    }
+  },
+  {
+    "name": "send_notification",
+    "description": "指定した宛先へ通知を送信する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "recipient": { "type": "string" },
+        "message": { "type": "string" },
+        "channel": { "type": "string", "enum": ["push", "email", "sms", "slack"] }
+      },
+      "required": ["recipient", "message"]
+    }
+  },
+  {
+    "name": "search_web",
+    "description": "ウェブを検索して情報を探す",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string" },
+        "language": { "type": "string", "description": "検索言語コード" },
+        "recency_days": { "type": "integer", "description": "直近何日以内に限定するか" },
+        "site": { "type": "string", "description": "検索対象ドメイン" }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "get_weather",
+    "description": "指定地域の現在または予報の天気を取得する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "location": { "type": "string" },
+        "date": { "type": "string", "description": "YYYY-MM-DD形式。省略時は現在" },
+        "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] }
+      },
+      "required": ["location"]
+    }
+  },
+  {
+    "name": "send_email",
+    "description": "メールを作成して送信する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "to": { "type": "array", "items": { "type": "string" } },
+        "subject": { "type": "string" },
+        "body": { "type": "string" },
+        "cc": { "type": "array", "items": { "type": "string" } },
+        "send_at": { "type": "string", "description": "送信日時。省略時は即時" }
+      },
+      "required": ["to", "subject", "body"]
+    }
+  },
+  {
+    "name": "create_task",
+    "description": "タスク管理サービスにタスクを登録する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "due_date": { "type": "string", "description": "YYYY-MM-DD形式" },
+        "project": { "type": "string" },
+        "priority": { "type": "integer", "description": "優先度。1が最高、4が最低" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title"]
+    }
+  },
+  {
+    "name": "update_task",
+    "description": "既存タスクの内容や状態を更新する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "task_id": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["todo", "in_progress", "done", "cancelled"] },
+        "due_date": { "type": "string" },
+        "priority": { "type": "integer" }
+      },
+      "required": ["task_id"]
+    }
+  },
+  {
+    "name": "save_note",
+    "description": "メモや議事録を保存する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "notebook": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["content"]
+    }
+  },
+  {
+    "name": "extract_invoice",
+    "description": "請求書の文章から請求書情報を抽出する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "vendor": { "type": "string" },
+        "invoice_number": { "type": "string" },
+        "issue_date": { "type": "string" },
+        "due_date": { "type": "string" },
+        "total_amount": { "type": "number" },
+        "currency": { "type": "string" }
+      },
+      "required": ["vendor", "total_amount"]
+    }
+  },
+  {
+    "name": "translate_text",
+    "description": "文章を指定した言語へ翻訳する",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "target_language": { "type": "string" },
+        "formality": { "type": "string", "enum": ["casual", "polite", "business"] }
+      },
+      "required": ["text", "target_language"]
+    }
+  }
+]

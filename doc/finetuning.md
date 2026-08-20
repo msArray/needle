@@ -27,6 +27,8 @@ needle finetune data.jsonl --epochs 10 --out adapter.pkl
 needle build checkpoints/needle2.pkl --lora adapter.pkl --out tuned.cact
 ```
 
+Training also copies the exact JSONL used by the run to `<adapter>.dataset.jsonl` and writes run settings to `<adapter>.metadata.json`. Pass `--no-save-data` only when this artifact copy is not wanted.
+
 ```python
 agent = needle.Needle(tools=[...], weights="tuned.cact")
 ```
@@ -35,7 +37,7 @@ To share a tuned model, set `NEEDLE_HF_REPO=<you>/<model>` and pass `--upload` t
 
 Defaults: batch size 16, learning rate 0.0001 with warmup and cosine decay, gradient clipping at norm 1, rank 16, alpha 32, max length 1024, validation split 0.1. The base checkpoint downloads from Hugging Face on first run.
 
-To grow a small hand written set, seed the generator with it (needs `OPENROUTER_API_KEY`; set `OPENROUTER_URL` to use another OpenAI compatible gateway):
+To grow a small hand written set, seed the generator with it. For a b.ai or other OpenAI-compatible provider, put `BAI_API_KEY`, `BAI_API_URL`, and optionally `BAI_MODEL` in `.env`; `DEEPSEEK_API_KEY`/`DEEPSEEK_URL` and the legacy `OPENROUTER_API_KEY`/`OPENROUTER_URL` are also supported:
 
 ```sh
 needle generate-data --augment data.jsonl --num-samples 1000

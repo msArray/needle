@@ -76,6 +76,8 @@ The server downloads and initializes the model before serving, so the first quer
 
 ## Fine-tuning
 
+日本語でのデータ生成と学習手順は [README_JP.md](README_JP.md) にまとめています。
+
 Needle fine-tunes with LoRA on the frozen base and merges the adapter at export, so a run is cheap and the tuned model is still a single `.cact` that runs on the same engine. The workflow is: (optionally) synthesize data, LoRA fine-tune, then build a tuned `.cact`. See [doc/finetuning.md](doc/finetuning.md) for dataset sizing, reading the loss curve, and troubleshooting.
 
 **Data format.** A JSONL file, one example per line. `reasoning` is optional; an off-topic example has `answers: []`.
@@ -93,6 +95,8 @@ needle generate-data --augment data.jsonl --num-samples 500      # expand an exi
 ```
 
 Set `OPENROUTER_URL` to use an OpenAI-compatible gateway instead of the default OpenRouter endpoint.
+
+For a b.ai or other OpenAI-compatible API, set `BAI_API_KEY`, `BAI_API_URL`, and optionally `BAI_MODEL` in a local `.env` file. See [README_JP.md](README_JP.md) for the Japanese setup.
 
 **2. LoRA fine-tune.** The base checkpoint auto-downloads from Hugging Face if you do not pass `--checkpoint`. `--generate N` first synthesizes N more examples from the tools in your data (also needs `OPENROUTER_API_KEY`).
 

@@ -40,6 +40,8 @@ def test_generate_examples_requires_api_key(monkeypatch):
     from needle.model import finetune
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("BAI_API_KEY", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     with pytest.raises(RuntimeError):
         finetune.generate_examples([{"name": "f"}], n=1)
 
@@ -53,6 +55,24 @@ def test_openrouter_url_can_be_overridden_from_environment(monkeypatch):
         assert finetune.OPENROUTER_URL == "https://gateway.example.test/v1/chat"
     finally:
         monkeypatch.delenv("OPENROUTER_URL", raising=False)
+        importlib.reload(finetune)
+
+
+def test_bai_credentials_use_env_endpoint(monkeypatch):
+    monkeypatch.setenv("BAI_API_KEY", "bai-key")
+    monkeypatch.setenv("BAI_API_URL", "https://b.ai.example/v1/chat/completions")
+    monkeypatch.setenv("BAI_MODEL", "bai-model")
+    from needle.model import finetune
+    importlib.reload(finetune)
+
+    try:
+        assert finetune._api_credentials() == (
+            "bai-key", "https://b.ai.example/v1/chat/completions")
+        assert finetune.DEFAULT_MODEL == "bai-model"
+    finally:
+        monkeypatch.delenv("BAI_API_KEY", raising=False)
+        monkeypatch.delenv("BAI_API_URL", raising=False)
+        monkeypatch.delenv("BAI_MODEL", raising=False)
         importlib.reload(finetune)
 
 
