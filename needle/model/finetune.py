@@ -4,6 +4,7 @@ import os
 import pickle
 import shutil
 import sys
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -114,17 +115,34 @@ def _openrouter(messages, model, api_key, temperature=0.9, url=None):
         "HTTP-Referer": "https://github.com/cactus-compute/needle",
         "X-Title": "needle",
     })
-    with urllib.request.urlopen(request, timeout=180) as response:
-        return json.loads(response.read().decode("utf-8"))["choices"][0]["message"]["content"]
+    try:
+        with urllib.request.urlopen(request, timeout=180) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:1000]
+        raise RuntimeError(f"API returned HTTP {exc.code}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"could not reach API endpoint: {exc.reason}") from exc
+    try:
+        return body["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError("API response did not contain choices[0].message.content: "
+                           + json.dumps(body, ensure_ascii=False)[:1000]) from exc
 
 
 def _parse_array(text):
+    if not isinstance(text, str):
+        return []
     start, end = text.find("["), text.rfind("]")
     if start < 0 or end <= start:
         return []
     try:
         rows = json.loads(text[start:end + 1])
     except json.JSONDecodeError:
+        return []
+    if isinstance(rows, dict):
+        rows = rows.get("examples", rows.get("data", []))
+    if not isinstance(rows, list):
         return []
     return [r for r in rows if isinstance(r, dict) and "query" in r and "answers" in r]
 
@@ -140,8 +158,14 @@ def generate_examples(tools, n=25, model=DEFAULT_MODEL, api_key=None, refusals=3
     text = _openrouter([{"role": "system", "content": _GEN_SYSTEM},
                         {"role": "user", "content": prompt}], model, api_key, url=url)
     rows = _parse_array(text)
+    if not rows:
+        raise RuntimeError("API returned no valid training examples. Response: "
+                           + str(text)[:1000])
     for row in rows:
         row.setdefault("tools", tools if isinstance(tools, list) else json.loads(tools))
+    if not rows:
+        raise RuntimeError("no training examples were generated; check BAI_API_KEY, "
+                           "BAI_API_URL, and BAI_MODEL")
     return rows
 
 
